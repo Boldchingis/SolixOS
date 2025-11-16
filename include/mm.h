@@ -52,4 +52,8 @@ void heap_init(void);
 void* heap_alloc(size_t size);
 void heap_free(void* ptr);
 
+// Memory diagnostics and statistics
+void print_memory_stats(void);
+bool verify_heap_integrity(void);
+
 #endif

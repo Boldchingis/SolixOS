@@ -34,11 +34,18 @@ void screen_init(void);
 void screen_clear(void);
 void screen_putc(char c);
 void screen_print(const char* str);
+void screen_print_n(const char* str, size_t max_len);
 void screen_print_hex(uint32_t value);
 void screen_print_dec(uint32_t value);
 void screen_set_color(uint8_t fg, uint8_t bg);
 void screen_set_cursor(uint8_t x, uint8_t y);
 void screen_get_cursor(uint8_t* x, uint8_t* y);
 void screen_scroll_up(void);
+void screen_update_cursor(void);
+void screen_update_cursor_now(void);
+
+// Performance monitoring functions
+void screen_get_stats(uint32_t* chars, uint32_t* clears, uint32_t* scrolls, uint32_t* flushes);
+void screen_reset_stats(void);
 
 #endif

@@ -1,12 +1,36 @@
 #include "kernel.h"
 #include "../include/screen.h"
 #include "../include/keyboard.h"
+#include "../include/mm.h"
+
+/**
+ * SolixOS Kernel Implementation
+ * Enhanced with comprehensive debugging, diagnostics, and performance monitoring
+ */
 
 // Kernel state
 process_t* current_process = NULL;
 uint32_t next_pid = 1;
 static process_t process_table[MAX_PROCESSES];
 static uint32_t process_bitmap[(MAX_PROCESSES + 31) / 32];
+
+// Debug state
+struct debug_info debug_state = {
+    .debug_level = DEBUG_INFO,
+    .log_buffer = {0},
+    .log_index = 0,
+    .panic_count = 0,
+    .last_panic_time = 0
+};
+
+// Performance statistics
+static struct {
+    uint32_t boot_time;
+    uint32_t uptime;
+    uint32_t context_switches;
+    uint32_t syscalls_count;
+    uint32_t interrupts_count;
+} kernel_stats = {0};
 
 // Multiboot information structure
 typedef struct multiboot_info {
@@ -19,40 +43,71 @@ typedef struct multiboot_info {
     uint32_t mods_addr;
 } __attribute__((packed)) multiboot_info_t;
 
-// Kernel entry point
+/**
+ * Kernel entry point with enhanced initialization
+ */
 void kmain(multiboot_info_t* mb_info) {
-    // Clear screen and display banner
+    // Record boot time
+    kernel_stats.boot_time = kernel_get_timestamp();
+    
+    // Clear screen and display enhanced banner
     screen_clear();
-    screen_print("SolixOS v1.0 - Lightweight CLI Operating System\n");
-    screen_print("================================================\n\n");
+    screen_print("SolixOS v");
+    screen_print(kernel_get_version());
+    screen_print(" - Enhanced CLI Operating System\n");
+    screen_print("================================================\n");
+    screen_print("Build: Enhanced with debugging and diagnostics\n");
+    screen_print("Boot time: ");
+    screen_print_dec(kernel_stats.boot_time);
+    screen_print(" ms\n\n");
     
     // Initialize kernel subsystems
     kernel_init();
     
-    // Start the shell
-    screen_print("Starting shell...\n");
-    shell_start();
+    // Display system information
+    debug_print(DEBUG_INFO, "System initialization complete");
+    screen_print("\n=== System Information ===\n");
+    screen_print("Memory: ");
+    screen_print_dec(mb_info ? (mb_info->mem_lower + mb_info->mem_upper) : 128);
+    screen_print(" MB\n");
+    screen_print("Processes: ");
+    screen_print_dec(MAX_PROCESSES);
+    screen_print(" max\n");
     
+    // Start the shell
+    screen_print("\nStarting enhanced shell...\n");
+    shell_start();
+
     // Kernel panic if we reach here
     panic("Shell terminated unexpectedly");
 }
 
-// Initialize all kernel subsystems
+/**
+ * Initialize all kernel subsystems with enhanced error handling
+ */
 void kernel_init(void) {
+    debug_print(DEBUG_INFO, "Initializing kernel subsystems...");
     screen_print("[*] Initializing kernel subsystems...\n");
-    
+
+    // Initialize debug system first
+    debug_init();
+    screen_print("[+] Debug system initialized\n");
+
     // Initialize process management
     process_init();
     screen_print("[+] Process management initialized\n");
-    
-    // Initialize memory management
+
+    // Initialize memory management with validation
     mm_init();
+    if (!verify_heap_integrity()) {
+        panic("Memory management initialization failed");
+    }
     screen_print("[+] Memory management initialized\n");
-    
+
     // Initialize interrupt system
     interrupts_init();
     screen_print("[+] Interrupt system initialized\n");
-    
+
     // Initialize filesystem
     vfs_init();
     screen_print("[+] Virtual filesystem initialized\n");
@@ -61,21 +116,53 @@ void kernel_init(void) {
     timer_init();
     keyboard_init();
     screen_print("[+] Hardware drivers initialized\n");
-    
+
     // Enable interrupts
     __asm__ volatile("sti");
     screen_print("[+] Interrupts enabled\n");
-    
+
     screen_print("[*] Kernel initialization complete\n\n");
+    debug_print(DEBUG_INFO, "All kernel subsystems operational");
 }
 
-// Kernel panic - unrecoverable error
+/**
+ * Enhanced kernel panic with detailed diagnostics
+ */
 void panic(const char* msg) {
+    // Update panic statistics
+    debug_state.panic_count++;
+    debug_state.last_panic_time = kernel_get_timestamp();
+    
     screen_print("\n\n!!! KERNEL PANIC !!!\n");
+    screen_print("Panic #");
+    screen_print_dec(debug_state.panic_count);
+    screen_print(" at ");
+    screen_print_dec(debug_state.last_panic_time);
+    screen_print(" ms\n");
     screen_print("Error: ");
     screen_print(msg);
-    screen_print("\nSystem halted.\n");
+    screen_print("\n\n=== Diagnostic Information ===\n");
     
+    // Dump current process information
+    if (current_process) {
+        screen_print("Current process: PID ");
+        screen_print_dec(current_process->pcb.pid);
+        screen_print(", State ");
+        screen_print_dec(current_process->pcb.state);
+        screen_print("\n");
+        debug_dump_process(current_process);
+    }
+    
+    // Dump memory statistics
+    print_memory_stats();
+    
+    // Dump stack trace
+    screen_print("\n=== Stack Trace ===\n");
+    debug_trace_stack(8);
+    
+    screen_print("\nSystem halted. Manual reboot required.\n");
+    debug_print(DEBUG_ERROR, "Kernel panic: %s", msg);
+
     // Disable interrupts and halt
     __asm__ volatile("cli");
     while(1) {

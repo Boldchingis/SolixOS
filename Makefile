@@ -1,105 +1,228 @@
-# SolixOS Build System
-# Lightweight Command-Line Operating System
+# SolixOS Makefile
+# Enhanced with better error reporting and diagnostics
+# Build system for SolixOS x86 microkernel
 
 # Compiler and tools
 CC = gcc
-AS = nasm
+ASM = nasm
 LD = ld
 OBJCOPY = objcopy
-MKISOFS = mkisofs
-QEMU = qemu-system-i386
+STRIP = strip
+
+# Build configuration
+BUILD_TYPE ?= release
+DEBUG ?= 0
+VERBOSE ?= 0
 
 # Directories
-BUILD_DIR = build
-ISO_DIR = iso
+SRC_DIR = src
 KERNEL_DIR = kernel
-DRIVER_DIR = drivers
+DRIVERS_DIR = drivers
 FS_DIR = fs
 SHELL_DIR = shell
 NET_DIR = net
 APPS_DIR = apps
-BROWSER_DIR = apps/browser
-PKG_DIR = apps/pkg
-NET_APPS_DIR = apps/net
+INCLUDE_DIR = include
+BUILD_DIR = build
+ISO_DIR = iso
 
-# Compiler flags
-CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs \
-         -Wall -Wextra -Werror -Wno-unused-function -Wno-unused-parameter \
-         -c -Iinclude -I$(KERNEL_DIR) -I$(DRIVER_DIR) -I$(FS_DIR) -I$(SHELL_DIR) -I$(NET_DIR) \
-         -I$(BROWSER_DIR) -I$(PKG_DIR) -I$(NET_APPS_DIR)
+# Output files
+KERNEL_ELF = $(BUILD_DIR)/kernel.elf
+KERNEL_BIN = $(BUILD_DIR)/kernel.bin
+ISO_FILE = $(BUILD_DIR)/solixos.iso
 
-ASFLAGS = -f elf32
-LDFLAGS = -melf_i386 -Tlinker.ld
+# Compiler flags with enhanced diagnostics
+CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector \
+         -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
+         -Wno-unused-function -Wno-unused-parameter \
+         -I$(INCLUDE_DIR) -ffreestanding -fno-pic -fno-pie
+
+# Build-specific flags
+ifeq ($(BUILD_TYPE),debug)
+    CFLAGS += -g -O0 -DDEBUG=1 -fsanitize=address
+    ASMFLAGS += -g
+else
+    CFLAGS += -O2 -DNDEBUG
+endif
+
+# Verbose output control
+ifeq ($(VERBOSE),0)
+    V = @
+else
+    V =
+endif
+
+# Assembly flags
+ASMFLAGS = -f elf32
+
+# Linker flags
+LDFLAGS = -m elf_i386 -nostdlib -T linker.ld
 
 # Source files
-KERNEL_SOURCES = $(KERNEL_DIR)/kernel.c $(KERNEL_DIR)/mm.c $(KERNEL_DIR)/interrupts.c
-DRIVER_SOURCES = $(DRIVER_DIR)/screen.c $(DRIVER_DIR)/keyboard.c $(DRIVER_DIR)/timer.c $(DRIVER_DIR)/ethernet.c $(DRIVER_DIR)/wifi.c
-FS_SOURCES = $(FS_DIR)/solixfs.c $(FS_DIR)/vfs.c
-SHELL_SOURCES = $(SHELL_DIR)/shell.c
-NET_SOURCES = $(NET_DIR)/net.c
-BROWSER_SOURCES = $(BROWSER_DIR)/lynx.c
-PKG_SOURCES = $(PKG_DIR)/pkg.c
-NET_APPS_SOURCES = $(NET_APPS_DIR)/ping.c $(NET_APPS_DIR)/ifconfig.c $(NET_APPS_DIR)/curl.c
-ASM_SOURCES = $(KERNEL_DIR)/isr.asm
+KERNEL_SOURCES = $(wildcard $(KERNEL_DIR)/*.c) $(wildcard $(KERNEL_DIR)/*.S)
+DRIVER_SOURCES = $(wildcard $(DRIVERS_DIR)/*.c) $(wildcard $(DRIVERS_DIR)/*.S)
+FS_SOURCES = $(wildcard $(FS_DIR)/*.c)
+SHELL_SOURCES = $(wildcard $(SHELL_DIR)/*.c)
+NET_SOURCES = $(wildcard $(NET_DIR)/*.c)
+APP_SOURCES = $(wildcard $(APPS_DIR)/*.c)
 
 # Object files
-KERNEL_OBJS = $(KERNEL_SOURCES:.c=.o)
-DRIVER_OBJS = $(DRIVER_SOURCES:.c=.o)
-FS_OBJS = $(FS_SOURCES:.c=.o)
-SHELL_OBJS = $(SHELL_SOURCES:.c=.o)
-NET_OBJS = $(NET_SOURCES:.c=.o)
-BROWSER_OBJS = $(BROWSER_SOURCES:.c=.o)
-PKG_OBJS = $(PKG_SOURCES:.c=.o)
-NET_APPS_OBJS = $(NET_APPS_SOURCES:.c=.o)
-ASM_OBJS = $(ASM_SOURCES:.asm=.o)
+KERNEL_OBJECTS = $(KERNEL_SOURCES:%.c=$(BUILD_DIR)/%.o) $(KERNEL_SOURCES:%.S=$(BUILD_DIR)/%.o)
+DRIVER_OBJECTS = $(DRIVER_SOURCES:%.c=$(BUILD_DIR)/%.o) $(DRIVER_SOURCES:%.S=$(BUILD_DIR)/%.o)
+FS_OBJECTS = $(FS_SOURCES:%.c=$(BUILD_DIR)/%.o)
+SHELL_OBJECTS = $(SHELL_SOURCES:%.c=$(BUILD_DIR)/%.o)
+NET_OBJECTS = $(NET_SOURCES:%.c=$(BUILD_DIR)/%.o)
+APP_OBJECTS = $(APP_SOURCES:%.c=$(BUILD_DIR)/%.o)
 
-ALL_OBJS = $(KERNEL_OBJS) $(DRIVER_OBJS) $(FS_OBJS) $(SHELL_OBJS) $(NET_OBJS) $(BROWSER_OBJS) $(PKG_OBJS) $(NET_APPS_OBJS) $(ASM_OBJS)
+ALL_OBJECTS = $(KERNEL_OBJECTS) $(DRIVER_OBJECTS) $(FS_OBJECTS) \
+              $(SHELL_OBJECTS) $(NET_OBJECTS) $(APP_OBJECTS)
 
-# Targets
-.PHONY: all clean iso run qemu
+# Default target
+.PHONY: all clean iso run debug help
+all: $(KERNEL_BIN) $(ISO_FILE)
 
-all: kernel.iso
+# Create build directories
+$(BUILD_DIR):
+	$(V)mkdir -p $(BUILD_DIR)/$(KERNEL_DIR)
+	$(V)mkdir -p $(BUILD_DIR)/$(DRIVERS_DIR)
+	$(V)mkdir -p $(BUILD_DIR)/$(FS_DIR)
+	$(V)mkdir -p $(BUILD_DIR)/$(SHELL_DIR)
+	$(V)mkdir -p $(BUILD_DIR)/$(NET_DIR)
+	$(V)mkdir -p $(BUILD_DIR)/$(APPS_DIR)
+	$(V)mkdir -p $(ISO_DIR)/boot/grub
 
-# Bootloader
-bootloader:
-	$(AS) -f bin -o $(BUILD_DIR)/boot.bin bootloader/boot.asm
+# Enhanced build reporting
+define build_report
+	@echo "=== Build Report ==="
+	@echo "Build Type: $(BUILD_TYPE)"
+	@echo "Debug: $(DEBUG)"
+	@echo "Objects: $(words $(ALL_OBJECTS))"
+	@echo "Kernel Size: $$(wc -c < $(KERNEL_BIN)) bytes"
+	@echo "Build Time: $$(date)"
+endef
 
-# Kernel
-kernel: bootloader
-	$(MAKE) -C $(KERNEL_DIR) CC=$(CC) CFLAGS="$(CFLAGS)"
-	$(MAKE) -C $(DRIVER_DIR) CC=$(CC) CFLAGS="$(CFLAGS)"
-	$(MAKE) -C $(FS_DIR) CC=$(CC) CFLAGS="$(CFLAGS)"
-	$(MAKE) -C $(SHELL_DIR) CC=$(CC) CFLAGS="$(CFLAGS)"
-	$(MAKE) -C $(NET_DIR) CC=$(CC) CFLAGS="$(CFLAGS)"
-	$(MAKE) -C $(BROWSER_DIR) CC=$(CC) CFLAGS="$(CFLAGS)"
-	$(MAKE) -C $(PKG_DIR) CC=$(CC) CFLAGS="$(CFLAGS)"
-	$(MAKE) -C $(NET_APPS_DIR) CC=$(CC) CFLAGS="$(CFLAGS)"
-	$(AS) $(ASFLAGS) -o $(BUILD_DIR)/isr.o $(KERNEL_DIR)/isr.asm
-	$(LD) $(LDFLAGS) -o $(BUILD_DIR)/kernel.bin $(ALL_OBJS) $(BUILD_DIR)/isr.o
+# Compile C source with enhanced error handling
+$(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
+	@echo "[CC] $<"
+	$(V)$(CC) $(CFLAGS) -c $< -o $@ \
+		|| (echo "\n!!! COMPILATION FAILED !!!"; \
+		    echo "File: $<"; \
+		    echo "Command: $(CC) $(CFLAGS) -c $< -o $@"; \
+		    exit 1)
 
-# ISO
-iso: kernel
-	mkdir -p $(ISO_DIR)/boot/grub
-	cp $(BUILD_DIR)/boot.bin $(ISO_DIR)/boot/
-	cp $(BUILD_DIR)/kernel.bin $(ISO_DIR)/boot/
-	cp grub.cfg $(ISO_DIR)/boot/grub/
-	$(MKISOFS) -R -b boot/boot.bin -no-emul-boot -boot-load-size 4 -o kernel.iso $(ISO_DIR)
+# Compile assembly source with error handling
+$(BUILD_DIR)/%.o: %.S | $(BUILD_DIR)
+	@echo "[ASM] $<"
+	$(V)$(ASM) $(ASMFLAGS) $< -o $@ \
+		|| (echo "\n!!! ASSEMBLY FAILED !!!"; \
+		    echo "File: $<"; \
+		    echo "Command: $(ASM) $(ASMFLAGS) $< -o $@"; \
+		    exit 1)
 
-# Run with QEMU
-run: iso
-	$(QEMU) -cdrom kernel.iso -m 512M
+# Link kernel with enhanced error reporting
+$(KERNEL_ELF): $(ALL_OBJECTS) linker.ld
+	@echo "[LD] Linking kernel..."
+	$(V)$(LD) $(LDFLAGS) -o $@ $(ALL_OBJECTS) \
+		|| (echo "\n!!! LINKING FAILED !!!"; \
+		    echo "Objects: $(ALL_OBJECTS)"; \
+		    echo "Command: $(LD) $(LDFLAGS) -o $@ $(ALL_OBJECTS)"; \
+		    exit 1)
+	@echo "[LD] Kernel linked successfully"
 
-# Debug with QEMU and GDB
-debug: iso
-	$(QEMU) -cdrom kernel.iso -m 512M -s -S
+# Create binary with validation
+$(KERNEL_BIN): $(KERNEL_ELF)
+	@echo "[OBJCOPY] Creating binary..."
+	$(V)$(OBJCOPY) -O binary $< $@ \
+		|| (echo "\n!!! BINARY CREATION FAILED !!!"; \
+		    exit 1)
+	@echo "[OBJCOPY] Binary created: $@"
+	@echo "[SIZE] Kernel size: $$(wc -c < $@) bytes"
 
-# Clean
+# Create ISO image with validation
+$(ISO_FILE): $(KERNEL_BIN) grub.cfg
+	@echo "[ISO] Creating ISO image..."
+	$(V)cp $(KERNEL_BIN) $(ISO_DIR)/boot/kernel.bin
+	$(V)cp grub.cfg $(ISO_DIR)/boot/grub/grub.cfg
+	$(V)grub-mkrescue -o $@ $(ISO_DIR) \
+		|| (echo "\n!!! ISO CREATION FAILED !!!"; \
+		    echo "Make sure grub-mkrescue is installed"; \
+		    exit 1)
+	@echo "[ISO] ISO image created: $@"
+	$(call build_report)
+
+# Enhanced clean with reporting
 clean:
-	rm -rf $(BUILD_DIR) $(ISO_DIR) *.o *.bin *.iso
+	@echo "[CLEAN] Removing build artifacts..."
+	$(V)rm -rf $(BUILD_DIR)
+	$(V)rm -f *.o *.elf *.bin *.iso
+	@echo "[CLEAN] Clean complete"
 
-# Create directories
-setup:
-	mkdir -p $(BUILD_DIR) $(ISO_DIR)/boot/grub
+# Run in QEMU with enhanced options
+run: $(ISO_FILE)
+	@echo "[QEMU] Starting SolixOS..."
+	qemu-system-i386 -cdrom $(ISO_FILE) -m 128M -serial stdio \
+		-d cpu_reset,int,exec,guest_errors \
+		-no-reboot -no-shutdown || true
+
+# Debug with GDB
+debug: $(KERNEL_ELF)
+	@echo "[DEBUG] Starting debug session..."
+	qemu-system-i386 -s -S -cdrom $(ISO_FILE) -m 128M -serial stdio \
+		-d cpu_reset,int,exec,guest_errors &
+	@echo "[DEBUG] GDB server started on localhost:1234"
+	@echo "[DEBUG] Run: gdb $(KERNEL_ELF) -ex 'target remote localhost:1234'"
+	@echo "[DEBUG] Press Ctrl+C to stop QEMU"
+	wait
+
+# Enhanced help system
+help:
+	@echo "SolixOS Build System - Enhanced Version"
+	@echo "====================================="
+	@echo ""
+	@echo "Targets:"
+	@echo "  all          - Build kernel and ISO (default)"
+	@echo "  clean        - Remove all build artifacts"
+	@echo "  iso          - Build ISO image only"
+	@echo "  run          - Run in QEMU"
+	@echo "  debug        - Debug with GDB server"
+	@echo "  help         - Show this help"
+	@echo ""
+	@echo "Options:"
+	@echo "  BUILD_TYPE=debug|release - Build type (default: release)"
+	@echo "  DEBUG=0|1              - Enable debug mode (default: 0)"
+	@echo "  VERBOSE=0|1            - Verbose output (default: 0)"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make BUILD_TYPE=debug DEBUG=1"
+	@echo "  make VERBOSE=1 run"
+	@echo "  make clean && make all"
+
+# Enhanced dependency checking
+deps:
+	@echo "[DEPS] Checking dependencies..."
+	@which gcc > /dev/null || (echo "ERROR: gcc not found"; exit 1)
+	@which nasm > /dev/null || (echo "ERROR: nasm not found"; exit 1)
+	@which ld > /dev/null || (echo "ERROR: ld not found"; exit 1)
+	@which grub-mkrescue > /dev/null || (echo "WARNING: grub-mkrescue not found (needed for ISO)"; exit 1)
+	@which qemu-system-i386 > /dev/null || (echo "WARNING: qemu not found (needed for testing)"; exit 1)
+	@echo "[DEPS] All dependencies satisfied"
+
+# Performance targets
+perf: $(KERNEL_BIN)
+	@echo "[PERF] Analyzing performance..."
+	@echo "[PERF] Kernel sections:"
+	@size $(KERNEL_BIN) || echo "size command not available"
+	@echo "[PERF] Object file sizes:"
+	@du -h $(ALL_OBJECTS) || echo "du command not available"
+
+# Static analysis (if available)
+lint:
+	@echo "[LINT] Running static analysis..."
+	@which cppcheck > /dev/null && cppcheck --enable=all --std=c99 $(KERNEL_SOURCES) || echo "cppcheck not available"
+	@which clang-tidy > /dev/null && clang-tidy $(KERNEL_SOURCES) -- $(CFLAGS) || echo "clang-tidy not available"
+
+# Phony targets
+.PHONY: deps perf lint $(BUILD_DIR) $(ISO_DIR)/boot/grub
 
 # Build everything
 build: setup kernel iso
