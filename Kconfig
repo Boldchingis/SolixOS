@@ -1,0 +1,636 @@
+#
+# SolixOS Kernel Configuration
+# Linux-inspired configuration system
+#
+
+mainmenu "SolixOS Kernel Configuration"
+
+config SOLIXOS
+    bool "SolixOS Kernel"
+    default y
+    help
+      This is the main configuration option for the SolixOS kernel.
+      Selecting this enables all the core kernel features.
+
+menu "Processor Type and Features"
+
+config X86
+    bool "x86 processor support"
+    default y
+    help
+      Enable support for x86 processors.
+
+config X86_32
+    bool "32-bit x86 support"
+    depends on X86
+    default y
+    help
+      Enable support for 32-bit x86 processors.
+
+config X86_64
+    bool "64-bit x86 support"
+    depends on X86
+    default n
+    help
+      Enable support for 64-bit x86 processors.
+
+config SMP
+    bool "Symmetric Multi-Processing support"
+    default n
+    help
+      Enables SMP support for multiple processors.
+
+config NR_CPUS
+    int "Maximum number of CPUs"
+    depends on SMP
+    range 2 32
+    default "4"
+    help
+      Specifies maximum number of CPUs supported by the kernel.
+
+config PREEMPT
+    bool "Preemptible Kernel"
+    default y
+    help
+      This option reduces the latency of the kernel by making
+      all kernel code (except spinlocks and raw_spinlocks) preemptible.
+
+config HZ
+    int "Timer frequency"
+    range 100 1000
+    default "100"
+    help
+      The default timer frequency for the kernel.
+
+endmenu
+
+menu "Memory Management"
+
+config SLAB
+    bool "SLAB allocator"
+    default y
+    help
+      Enable the SLAB memory allocator for efficient kernel memory management.
+
+config SLUB
+    bool "SLUB allocator"
+    depends on !SLAB
+    default n
+    help
+      Enable the SLUB memory allocator (alternative to SLAB).
+
+config SLOB
+    bool "SLOB allocator"
+    depends on !SLAB && !SLUB
+    default n
+    help
+      Enable the SLOB memory allocator (simpler but less efficient).
+
+config MEMORY_HOTPLUG
+    bool "Memory hotplug support"
+    default n
+    help
+      Enable support for adding/removing memory at runtime.
+
+config MEMORY_FAILURE
+    bool "Memory failure handling"
+    default y
+    help
+      Enable handling of hardware memory errors.
+
+config KMEMCHECK
+    bool "Kernel memory checker"
+    default n
+    help
+      Enable kernel memory corruption detection.
+
+config DEBUG_KMEMLEAK
+    bool "Kernel memory leak detector"
+    default n
+    help
+      Enable kernel memory leak detection.
+
+endmenu
+
+menu "File Systems"
+
+config EXT2_FS
+    bool "Second extended fs support"
+    default y
+    help
+      Ext2 is a standard Linux file system.
+
+config EXT3_FS
+    bool "Third extended fs support"
+    default y
+    help
+      Ext3 is a journaling version of the ext2 filesystem.
+
+config EXT4_FS
+    bool "Fourth extended fs support"
+    default n
+    help
+      Ext4 is a scalable filesystem with journaling and extents support.
+
+config PROC_FS
+    bool "Process filesystem (/proc)"
+    default y
+    help
+      This is a virtual filesystem providing process and system information.
+
+config SYSFS
+    bool "Sysfs filesystem"
+    default y
+    help
+      This is a virtual filesystem for kernel objects.
+
+config TMPFS
+    bool "Virtual memory file system support (shm fs)"
+    default y
+    help
+      Tmpfs is a file system which keeps all files in virtual memory.
+
+config NFS_FS
+    bool "NFS client support"
+    default n
+    help
+      NFS client support.
+
+config NFS_V3
+    bool "NFS client support for NFS version 3"
+    depends on NFS_FS
+    default y
+    help
+      Include support for NFS version 3.
+
+config NFS_V4
+    bool "NFS client support for NFS version 4"
+    depends on NFS_FS
+    default n
+    help
+      Include support for NFS version 4.
+
+endmenu
+
+menu "Device Drivers"
+
+config NETDEVICES
+    bool "Network device support"
+    default y
+    help
+      Enable network device support.
+
+config NET_CORE
+    bool "Network core support"
+    default y
+    depends on NETDEVICES
+    help
+      Enable network core functionality.
+
+config NET_ETHERNET
+    bool "Ethernet driver support"
+    default y
+    depends on NETDEVICES
+    help
+      Enable Ethernet network drivers.
+
+config RTL8139
+    bool "Realtek 8139 Fast Ethernet"
+    depends on NET_ETHERNET
+    default y
+    help
+      Driver for Realtek 8139 Fast Ethernet cards.
+
+config E1000
+    bool "Intel(R) PRO/1000 Gigabit Ethernet support"
+    depends on NET_ETHERNET
+    default n
+    help
+      Driver for Intel PRO/1000 Gigabit Ethernet cards.
+
+config INPUT
+    bool "Input devices"
+    default y
+    help
+      Enable input device support.
+
+config INPUT_KEYBOARD
+    bool "Keyboards"
+    depends on INPUT
+    default y
+    help
+      Enable keyboard input devices.
+
+config KEYBOARD_ATKBD
+    bool "AT keyboard"
+    depends on INPUT_KEYBOARD
+    default y
+    help
+      Enable AT keyboard support.
+
+config SERIAL
+    bool "Serial drivers"
+    default y
+    help
+      Enable serial port drivers.
+
+config SERIAL_8250
+    bool "8250/16550 serial support"
+    depends on SERIAL
+    default y
+    help
+      Enable standard 8250/16550 serial port support.
+
+config VGA_CONSOLE
+    bool "VGA text console"
+    default y
+    help
+      Enable VGA text console support.
+
+config FRAMEBUFFER_CONSOLE
+    bool "Framebuffer Console support"
+    default n
+    help
+      Enable framebuffer console support.
+
+endmenu
+
+menu "Networking"
+
+config NET
+    bool "Networking support"
+    default y
+    help
+      Enable networking support.
+
+config INET
+    bool "TCP/IP networking"
+    depends on NET
+    default y
+    help
+      Enable TCP/IP networking support.
+
+config IP_MULTICAST
+    bool "IP: multicasting"
+    depends on INET
+    default y
+    help
+      Enable IP multicasting support.
+
+config TCP_CONG_BIC
+    bool "TCP BIC congestion control"
+    depends on INET
+    default y
+    help
+      BIC TCP congestion control algorithm.
+
+config TCP_CONG_CUBIC
+    bool "TCP CUBIC congestion control"
+    depends on INET
+    default y
+    help
+      CUBIC TCP congestion control algorithm.
+
+config NETFILTER
+    bool "Network packet filtering framework (Netfilter)"
+    depends on INET
+    default n
+    help
+      Enable Netfilter packet filtering.
+
+endmenu
+
+menu "Kernel Hacking"
+
+config DEBUG_KERNEL
+    bool "Kernel debugging"
+    default y
+    help
+      Enable kernel debugging features.
+
+config DEBUG_INFO
+    bool "Compile the kernel with debug info"
+    depends on DEBUG_KERNEL
+    default y
+    help
+      Build kernel with -g flag for debugging.
+
+config DEBUG_FS
+    bool "Debug Filesystem"
+    depends on DEBUG_KERNEL
+    default y
+    help
+      debugfs is a virtual file system that kernel developers use
+      to put debugging files into.
+
+config MAGIC_SYSRQ
+    bool "Magic SysRq key"
+    depends on DEBUG_KERNEL
+    default y
+    help
+      If you say Y here, you will have some control over the system
+      even if the system crashes.
+
+config DEBUG_STACKOVERFLOW
+    bool "Check for stack overflows"
+    depends on DEBUG_KERNEL
+    default y
+    help
+      This option will cause the kernel to check for stack overflows.
+
+config DEBUG_MUTEXES
+    bool "Mutex debugging, deadlock detection"
+    depends on DEBUG_KERNEL
+    default n
+    help
+      Enable mutex debugging and deadlock detection.
+
+config LOCKDEP
+    bool "Lock dependency engine"
+    depends on DEBUG_KERNEL
+    default n
+    help
+      Enable lock dependency checking.
+
+config DEBUG_SPINLOCK
+    bool "Spinlock debugging"
+    depends on DEBUG_KERNEL
+    default n
+    help
+      Enable spinlock debugging.
+
+endmenu
+
+menu "Security Options"
+
+config SECURITY
+    bool "Enable different security models"
+    default n
+    help
+      This allows you to choose different security models.
+
+config SECURITY_SELINUX
+    bool "NSA SELinux Support"
+    depends on SECURITY
+    default n
+    help
+      This enables NSA SELinux support.
+
+config SECURITY_SMACK
+    bool "Simplified Mandatory Access Control Kernel"
+    depends on SECURITY
+    default n
+    help
+      This enables SMACK support.
+
+config KEYS
+    bool "Enable access key retention support"
+    default n
+    help
+      This provides a generic key retention service for key management.
+
+endmenu
+
+menu "Cryptographic API"
+
+config CRYPTO
+    bool "Cryptographic API"
+    default y
+    help
+      This option provides the core Cryptographic API.
+
+config CRYPTO_ALGAPI
+    bool "Algorithm registry"
+    depends on CRYPTO
+    default y
+    help
+      Provides the kernel crypto API for algorithms.
+
+config CRYPTO_HASH
+    bool "Hash functions"
+    depends on CRYPTO
+    default y
+    help
+      Enable hash algorithms like SHA1, SHA256, MD5, etc.
+
+config CRYPTO_SHA256
+    bool "SHA256 digest algorithm"
+    depends on CRYPTO_HASH
+    default y
+    help
+      SHA256 hash algorithm.
+
+config CRYPTO_SHA1
+    bool "SHA1 digest algorithm"
+    depends on CRYPTO_HASH
+    default y
+    help
+      SHA1 hash algorithm.
+
+config CRYPTO_MD5
+    bool "MD5 digest algorithm"
+    depends on CRYPTO_HASH
+    default y
+    help
+      MD5 hash algorithm.
+
+config CRYPTO_AES
+    bool "AES cipher algorithms"
+    depends on CRYPTO
+    default y
+    help
+      AES cipher algorithms.
+
+endmenu
+
+menu "Library Routines"
+
+config BITREVERSE
+    bool "Bitreverse support"
+    default y
+    help
+      Provide bitreverse functions.
+
+config GENERIC_FIND_FIRST_BIT
+    bool "Generic find first bit support"
+    default y
+    help
+      Provide generic find first bit functions.
+
+config GENERIC_FIND_LAST_BIT
+    bool "Generic find last bit support"
+    default y
+    help
+      Provide generic find last bit functions.
+
+config CRC_CCITT
+    bool "CRC-CCITT functions"
+    default y
+    help
+      Provide CRC-CCITT functions.
+
+config CRC16
+    bool "CRC16 functions"
+    default y
+    help
+      Provide CRC16 functions.
+
+config CRC32
+    bool "CRC32 functions"
+    default y
+    help
+      Provide CRC32 functions.
+
+config ZLIB_INFLATE
+    bool "ZLIB inflate support"
+    default y
+    help
+      Provide zlib inflate decompression support.
+
+config ZLIB_DEFLATE
+    bool "ZLIB deflate support"
+    default y
+    help
+      Provide zlib deflate compression support.
+
+endmenu
+
+menu "Power Management"
+
+config PM
+    bool "Power Management support"
+    default y
+    help
+      Enable power management support.
+
+config PM_SLEEP
+    bool "Suspend to RAM and standby"
+    depends on PM
+    default n
+    help
+      Enable suspend to RAM and standby support.
+
+config PM_RUNTIME
+    bool "Run-time Power Management"
+    depends on PM
+    default n
+    help
+      Enable runtime power management.
+
+config ACPI
+    bool "ACPI Support"
+    depends on PM
+    default n
+    help
+      Advanced Configuration and Power Interface (ACPI) support.
+
+endmenu
+
+menu "Virtualization"
+
+config HYPERVISOR
+    bool "Hypervisor support"
+    default n
+    help
+      Enable hypervisor support.
+
+config KVM
+    bool "Kernel-based Virtual Machine (KVM) support"
+    depends on HYPERVISOR
+    default n
+    help
+      Enable KVM virtualization support.
+
+config XEN
+    bool "Xen guest support"
+    depends on HYPERVISOR
+    default n
+    help
+      Enable Xen guest support.
+
+endmenu
+
+menu "Kernel Performance"
+
+config PERF_EVENTS
+    bool "Kernel performance events and counters"
+    default y
+    help
+      Enable kernel performance monitoring.
+
+config OPROFILE
+    bool "OProfile system profiling"
+    default n
+    help
+      OProfile is a profiling system capable of profiling the
+      whole system, including the kernel, kernel modules, libraries,
+      and applications.
+
+endmenu
+
+menu "Module Support"
+
+config MODULES
+    bool "Enable loadable module support"
+    default y
+    help
+      Enable loadable kernel module support.
+
+config MODULE_UNLOAD
+    bool "Module unloading"
+    depends on MODULES
+    default y
+    help
+      Enable module unloading support.
+
+config MODULE_FORCE_LOAD
+    bool "Forced module loading"
+    depends on MODULES
+    default n
+    help
+      Allow loading of modules without version information.
+
+config MODULE_SIG
+    bool "Module signature verification"
+    depends on MODULES
+    default n
+    help
+      Enable module signature verification.
+
+config MODULE_COMPRESS
+    bool "Compress modules on installation"
+    depends on MODULES
+    default n
+    help
+      Compress kernel modules when installing them.
+
+config MODULE_STRIP
+    bool "Strip module symbols"
+    depends on MODULES
+    default n
+    help
+      Strip debugging symbols from modules.
+
+endmenu
+
+menu "Build Options"
+
+config DEBUG_SECTION_MISMATCH
+    bool "Detect section mismatches during build"
+    default y
+    help
+      Enable detection of section mismatches during kernel build.
+
+config DEBUG_SETUID_RLIMIT
+    bool "RLIMIT checking for setuid programs"
+    default y
+    help
+      Enable checking for setuid programs.
+
+config BUILD_BIN2C
+    bool "Build bin2c utility"
+    default y
+    help
+      Build the bin2c utility for converting binary files to C arrays.
+
+endmenu

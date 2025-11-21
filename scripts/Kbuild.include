@@ -1,0 +1,163 @@
+#
+# SolixOS Kbuild Include File
+# Linux-inspired build system rules and functions
+#
+
+# Check for alternative build system
+ifneq ($(wildcard $(srctree)/include/config/kbuild.h),)
+include $(srctree)/include/config/kbuild.h
+endif
+
+# Build variables
+src := $(obj)
+PHONY := __build
+__build:
+
+# Include generated files
+-include include/config/auto.conf.cmd
+
+# Build targets
+ifneq ($(strip $(builtin-target) $(lib-target) $(extra-y) $(subdir-ym) $(subdir-ymn) $(subdir-m)),)
+__build: $(builtin-target) $(lib-target) $(extra-y) $(subdir-ym) $(subdir-ymn) $(subdir-m)
+	@:
+endif
+
+# Built-in targets
+ifneq ($(strip $(obj-m) $(obj-y) $(lib-m) $(lib-y) $(extra-m)),)
+builtin-target := $(obj)/built-in.o
+endif
+
+# Library targets
+ifneq ($(strip $(lib-y) $(lib-m)),)
+lib-target := $(obj)/lib.a
+endif
+
+# Always build
+always := $(always-y)
+
+# Clean targets
+clean-files := $(addprefix $(obj)/,$(clean-files))
+clean-dirs := $(addprefix $(obj)/,$(clean-dirs))
+
+# Targets
+targets := $(addprefix $(obj)/,$(targets))
+
+# Build directory
+build-dir := $(objtree)/$(subst $(srctree)/,,$(obj))
+
+# Include dependency files
+-include $(foreach f,$(addprefix $(build-dir)/,$(target-files)),$(f:.o=.cmd))
+
+# Compile flags
+c_flags = -Wp,-MD,$(depfile) $(NOSTDINC_FLAGS) $(KBUILD_CPPFLAGS) \
+	  $(KBUILD_CFLAGS) $(CFLAGS_$(basetarget).o)
+
+# Assembly flags
+a_flags = -Wp,-MD,$(depfile) $(NOSTDINC_FLAGS) $(KBUILD_CPPFLAGS) \
+	  $(KBUILD_AFLAGS) $(AFLAGS_$(basetarget).o)
+
+# Link flags
+ld_flags = $(LDFLAGS) $(ldflags-y)
+
+# Object files
+obj-y := $(addprefix $(obj)/,$(obj-y))
+obj-m := $(addprefix $(obj)/,$(obj-m))
+lib-y := $(addprefix $(obj)/,$(lib-y))
+lib-m := $(addprefix $(obj)/,$(lib-m))
+extra-y := $(addprefix $(obj)/,$(extra-y))
+always := $(addprefix $(obj)/,$(always))
+
+# Subdirectories
+subdir-ym := $(addprefix $(obj)/,$(subdir-ym))
+subdir-ymn := $(addprefix $(obj)/,$(subdir-ymn))
+subdir-m := $(addprefix $(obj)/,$(subdir-m))
+
+# Built-in objects
+builtin-target := $(addprefix $(obj)/,$(builtin-target))
+lib-target := $(addprefix $(obj)/,$(lib-target))
+
+# Targets
+targets := $(addprefix $(obj)/,$(targets))
+
+# Build built-in target
+ifdef builtin-target
+$(builtin-target): $(obj-y)
+	$(call if_changed,link_o)
+endif
+
+# Build library target
+ifdef lib-target
+$(lib-target): $(lib-y)
+	$(call if_changed,ar)
+endif
+
+# Build objects
+$(obj)/%.o: $(src)/%.c FORCE
+	$(call cmd,compile_c)
+
+$(obj)/%.o: $(src)/%.S FORCE
+	$(call cmd,compile_s)
+
+$(obj)/%.o: $(src)/%.s FORCE
+	$(call cmd,compile_s)
+
+# Build subdirectories
+ifdef subdir-ym
+$(subdir-ym):
+	$(Q)$(MAKE) -f $(srctree)/Makefile.build obj=$@
+endif
+
+ifdef subdir-ymn
+$(subdir-ymn):
+	$(Q)$(MAKE) -f $(srctree)/Makefile.build obj=$@
+endif
+
+ifdef subdir-m
+$(subdir-m):
+	$(Q)$(MAKE) -f $(srctree)/Makefile.build obj=$@
+endif
+
+# Always build targets
+$(always): FORCE
+	@:
+
+# Clean
+clean: $(clean-files) $(clean-dirs)
+	@:
+
+$(clean-files):
+	$(call cmd,clean)
+
+$(clean-dirs):
+	$(call cmd,cleandir)
+
+# Quiet commands
+quiet_cmd_compile_c = CC      $@
+      cmd_compile_c = $(CC) $(c_flags) -c -o $@ $<
+quiet_cmd_compile_s = AS      $@
+      cmd_compile_s = $(CC) $(a_flags) -c -o $@ $<
+quiet_cmd_link_o = LD      $@
+      cmd_link_o = $(LD) $(ld_flags) -r -o $@ $^
+quiet_cmd_ar = AR      $@
+      cmd_ar = $(AR) rcs $@ $^
+quiet_cmd_clean = CLEAN   $@
+      cmd_clean = rm -f $@
+quiet_cmd_cleandir = CLEAN   $(obj)/$*
+      cmd_cleandir = rm -rf $(obj)/$*
+
+# Build functions
+if_changed = $(if $(strip $(filter-out $(PHONY),$?)          \
+		$(filter-out $(PHONY),$^)),\
+	$(call if_changed_dep,$1,$(2)),\
+	@:)
+
+if_changed_dep = $(if $(strip $(filter-out $(PHONY),$?)  \
+		$(filter-out $(PHONY),$^)),\
+	$(cmd_$(1)) && \
+	echo 'cmd_$@ := $(cmd_$(1))' > $(@D)/.$(@F).cmd, @:)
+
+# Include generated files
+-include $(foreach f,$(addprefix $(build-dir)/,$(target-files)),$(f:.o=.cmd))
+
+# PHONY
+.PHONY: $(PHONY) clean

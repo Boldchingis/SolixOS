@@ -1,0 +1,327 @@
+#
+# SolixOS Linux-Inspired Build System
+# Enhanced Makefile with Linux kernel-style configuration and structure
+#
+
+# Kernel version
+KERNEL_VERSION_MAJOR = 1
+KERNEL_VERSION_MINOR = 0
+KERNEL_VERSION_PATCH = 0
+KERNEL_VERSION = $(KERNEL_VERSION_MAJOR).$(KERNEL_VERSION_MINOR).$(KERNEL_VERSION_PATCH).0
+KERNEL_RELEASE = 1
+
+# Build configuration
+CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
+		  else if [ -x /bin/bash ]; then echo /bin/bash; \
+		  else echo sh; fi ; fi)
+
+# Cross-compiler configuration
+CROSS_COMPILE ?=
+CC := $(CROSS_COMPILE)gcc
+CXX := $(CROSS_COMPILE)g++
+LD := $(CROSS_COMPILE)ld
+AR := $(CROSS_COMPILE)ar
+NM := $(CROSS_COMPILE)nm
+STRIP := $(CROSS_COMPILE)strip
+OBJCOPY := $(CROSS_COMPILE)objcopy
+OBJDUMP := $(CROSS_COMPILE)objdump
+READELF := $(CROSS_COMPILE)readelf
+SIZE := $(CROSS_COMPILE)size
+
+# Architecture
+ARCH ?= x86
+SRCARCH := $(shell echo $(ARCH) | sed -e s/i.86/x86/ -e s/x86_64/x86/)
+
+# Include architecture-specific Makefile
+include arch/$(SRCARCH)/Makefile
+
+# Output directories
+objtree := .
+src := .
+obj := $(objtree)
+srctree := $(src)
+
+# Build directories
+BUILD_DIR := $(objtree)/build
+OUTPUT_DIR := $(objtree)/output
+ISO_DIR := $(objtree)/iso
+MODULES_DIR := $(objtree)/modules
+TOOLS_DIR := $(objtree)/tools
+
+# Kernel image
+KERNEL_ELF := $(OUTPUT_DIR)/vmlinux
+KERNEL_IMAGE := $(OUTPUT_DIR)/bzImage
+SYSTEM_MAP := $(OUTPUT_DIR)/System.map
+
+# Configuration
+KCONFIG_CONFIG := .config
+KCONFIG_AUTOCONFIG := include/generated/autoconf.h
+KCONFIG_TRISTATE := include/config/tristate.conf
+KCONFIG_AUTOHEADER := include/generated/autoconf.h
+
+# Include generated configuration
+-include $(KCONFIG_CONFIG)
+include $(KCONFIG_AUTOCONFIG)
+
+# Compiler flags
+KBUILD_CPPFLAGS := -D__KERNEL__ -DKBUILD_BASENAME="-"
+KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
+		   -fno-strict-aliasing -fno-common -fno-delete-null-pointer-checks \
+		   -fno-stack-protector -fno-omit-frame-pointer \
+		   -fno-optimize-sibling-calls -fno-var-tracking-assignments \
+		   -gsplit-dwarf -gdwarf-4 -Wdeclaration-after-statement \
+		   -Werror=date-time -Wno-packed-bitfield-compat
+KBUILD_AFLAGS   := -D__ASSEMBLY__ -gdwarf-2
+
+# Architecture-specific flags
+ifeq ($(ARCH),x86)
+    KBUILD_CFLAGS += -m32 -march=i386 -mregparm=3 -freg-struct-return
+    KBUILD_AFLAGS += -m32
+    KBUILD_LDFLAGS := -m elf_i386
+endif
+
+# Debug flags
+ifdef CONFIG_DEBUG_INFO
+    KBUILD_CFLAGS += -g
+    KBUILD_AFLAGS += -g
+endif
+
+# Optimization flags
+KBUILD_CFLAGS += -O2
+KBUILD_AFLAGS += -Os
+
+# Warning flags
+KBUILD_CFLAGS += -Werror-implicit-function-declaration \
+                 -Werror=return-type -Wno-format-security \
+                 -Wno-format-zero-length
+
+# Include directories
+KBUILD_CPPFLAGS += -I$(srctree)/include \
+                   -I$(srctree)/arch/$(SRCARCH)/include \
+                   -I$(objtree)/include \
+                   -I$(objtree)/include/generated
+
+# Build flags
+KBUILD_CFLAGS += $(KBUILD_CPPFLAGS) $(KBUILD_CFLAGS_KERNEL)
+KBUILD_AFLAGS += $(KBUILD_CPPFLAGS) $(KBUILD_AFLAGS_KERNEL)
+
+# Linker flags
+KBUILD_LDFLAGS += $(KBUILD_LDFLAGS_KERNEL)
+KBUILD_LDFLAGS_MODULE += $(KBUILD_LDFLAGS_KERNEL)
+
+# Export variables
+export KBUILD_CPPFLAGS KBUILD_CFLAGS KBUILD_AFLAGS KBUILD_LDFLAGS
+export KBUILD_LDFLAGS_MODULE KBUILD_CFLAGS_KERNEL KBUILD_AFLAGS_KERNEL
+export CONFIG_SHELL HOSTCC HOSTCFLAGS CROSS_COMPILE ARCH
+export CC CXX LD AR NM STRIP OBJCOPY OBJDUMP READELF SIZE
+
+# Quiet build
+ifndef KBUILD_VERBOSE
+    KBUILD_VERBOSE := 0
+endif
+
+ifeq ($(KBUILD_VERBOSE),1)
+    quiet :=
+    Q :=
+else
+    quiet := quiet_
+    Q := @
+endif
+
+# Build commands
+cmd_compile_c = $(CC) $(c_flags) -c -o $@ $<
+cmd_compile_s = $(CC) $(a_flags) -c -o $@ $<
+cmd_link_o = $(LD) $(ld_flags) -o $@ $^
+cmd_ar = $(AR) rcs $@ $^
+cmd_strip = $(STRIP) --strip-unneeded $@
+
+# Build rules
+quiet_cmd_compile_c = CC      $@
+      cmd_compile_c = $(cmd_compile_c)
+quiet_cmd_compile_s = AS      $@
+      cmd_compile_c = $(cmd_compile_s)
+quiet_cmd_link_o = LD      $@
+      cmd_link_o = $(cmd_link_o)
+quiet_cmd_ar = AR      $@
+      cmd_ar = $(cmd_ar)
+quiet_cmd_strip = STRIP   $@
+      cmd_strip = $(cmd_strip)
+
+# Source files
+core-y := kernel/ mm/ fs/ ipc/ security/ crypto/ block/
+drivers-y := drivers/
+net-y := net/
+libs-y := lib/
+
+# Core objects
+core-y += kernel/built-in.o mm/built-in.o fs/built-in.o ipc/built-in.o \
+          security/built-in.o crypto/built-in.o block/built-in.o
+
+# Driver objects
+drivers-y += drivers/built-in.o
+
+# Network objects
+net-y += net/built-in.o
+
+# Library objects
+libs-y += lib/built-in.o
+
+# Kernel objects
+KBUILD_VMLINUX_OBJS := $(core-y) $(libs-y) $(drivers-y) $(net-y)
+
+# Link order
+KBUILD_VMLINUX_INIT := $(head-y) $(init-y)
+KBUILD_VMLINUX_MAIN := $(core-y) $(libs-y) $(drivers-y) $(net-y)
+KBUILD_VMLINUX_LIBS := $(libs-y)
+
+# Default target
+all: vmlinux modules
+
+# Kernel image
+vmlinux: $(KERNEL_ELF) $(SYSTEM_MAP)
+	$(Q)$(MAKE) -f $(srctree)/Makefile build_image
+
+# System map
+$(SYSTEM_MAP): $(KERNEL_ELF)
+	$(call if_changed,nm)
+
+# Build kernel image
+build_image: $(KERNEL_ELF)
+	$(Q)echo "Building kernel image..."
+	$(Q)$(OBJCOPY) -O binary $(KERNEL_ELF) $(KERNEL_IMAGE)
+	$(Q)echo "Kernel image: $(KERNEL_IMAGE)"
+
+# Link vmlinux
+$(KERNEL_ELF): $(KBUILD_VMLINUX_OBJS) $(KBUILD_LDS_MODULE)
+	$(call if_changed,link_vmlinux)
+
+# Link command
+quiet_cmd_link_vmlinux = LD      $@
+      cmd_link_vmlinux = $(LD) $(LDFLAGS) $(LDFLAGS_vmlinux) -o $@ \
+      -T $(KBUILD_LDS_MODULE) $(KBUILD_VMLINUX_INIT) \
+      --start-group $(KBUILD_VMLINUX_MAIN) --end-group \
+      $(filter-out $(KBUILD_VMLINUX_INIT) $(KBUILD_VMLINUX_MAIN) $(vmlinux-lds),$^)
+
+# Built-in targets
+builtin-target := $(foreach m,$(core-y) $(drivers-y) $(net-y) $(libs-y),$(if $(filter %/,$m),$(m:.o=)/built-in.o,$(m)))
+
+# Compile built-in targets
+$(builtin-target): $(obj)/%/built-in.o: FORCE
+	$(Q)$(MAKE) -f $(srctree)/Makefile.build obj=$* builtin
+
+# Modules
+ifdef CONFIG_MODULES
+modules: $(KBUILD_MODULES)
+	$(Q)echo "Building modules, stage 2."
+	$(Q)$(MAKE) -f $(srctree)/Makefile.modpost
+
+# Module targets
+$(KBUILD_MODULES): $(vmlinux-dirs)
+	$(Q)$(MAKE) -f $(srctree)/Makefile.build obj=$@ modules
+
+else
+modules:
+	@echo "Module support disabled"
+endif
+
+# Clean
+clean: $(clean-dirs)
+	$(Q)$(MAKE) -f $(srctree)/Makefile.clean obj=.
+	$(Q)find . -name "*.o" -delete
+	$(Q)find . -name "*.ko" -delete
+	$(Q)find . -name "*.mod" -delete
+	$(Q)find . -name "*.mod.c" -delete
+	$(Q)find . -name "*.symvers" -delete
+	$(Q)find . -name "*.order" -delete
+	$(Q)rm -f $(KERNEL_ELF) $(KERNEL_IMAGE) $(SYSTEM_MAP)
+	$(Q)rm -rf $(BUILD_DIR) $(OUTPUT_DIR) $(ISO_DIR) $(MODULES_DIR)
+
+# Distclean
+distclean: clean
+	$(Q)rm -f .config .config.old
+	$(Q)rm -rf include/generated
+	$(Q)rm -f $(KCONFIG_CONFIG)
+
+# Help
+help:
+	@echo "SolixOS Linux-Inspired Build System"
+	@echo "=================================="
+	@echo ""
+	@echo "Build targets:"
+	@echo "  all         - Build all targets (kernel + modules)"
+	@echo "  vmlinux     - Build the bare kernel"
+	@echo "  modules     - Build all modules"
+	@echo "  clean       - Remove all generated files"
+	@echo "  distclean   - Remove all generated files + config"
+	@echo "  help        - Show this help"
+	@echo ""
+	@echo "Configuration:"
+	@echo "  menuconfig  - Update current config using a menu"
+	@echo "  xconfig    - Update current config using a QT based front-end"
+	@echo "  gconfig    - Update current config using a GTK based front-end"
+	@echo "  oldconfig   - Update current config using a .config file"
+	@echo "  defconfig   - New config with default from arch supplied defconfig"
+	@echo "  savedefconfig - Save current config as ./defconfig (minimal config)"
+	@echo ""
+	@echo "Analysis:"
+	@echo "  C=1         - Check all c source with sparse"
+	@echo "  C=2         - Enable sparse checking mode (experimental)"
+	@echo "  CHECK=      - Use sparse checker"
+	@echo "  CHECKFLAGS  - Sparse checker flags"
+	@echo ""
+	@echo "Other targets:"
+	@echo "  *           - See Documentation/kbuild/kconfig.txt"
+	@echo ""
+	@echo "Execute 'make' or 'make all' to build the kernel."
+	@echo "Execute 'make menuconfig' to configure the kernel."
+
+# Configuration targets
+config:
+	$(Q)$(MAKE) -f $(srctree)/scripts/kconfig/Makefile $@
+
+menuconfig: config
+	$(Q)$(MAKE) -f $(srctree)/scripts/kconfig/Makefile menuconfig
+
+xconfig: config
+	$(Q)$(MAKE) -f $(srctree)/scripts/kconfig/Makefile xconfig
+
+gconfig: config
+	$(Q)$(MAKE) -f $(srctree)/scripts/kconfig/Makefile gconfig
+
+oldconfig:
+	$(Q)$(MAKE) -f $(srctree)/scripts/kconfig/Makefile oldconfig
+
+defconfig:
+	$(Q)$(MAKE) -f $(srctree)/scripts/kconfig/Makefile defconfig
+
+savedefconfig:
+	$(Q)$(MAKE) -f $(srctree)/scripts/kconfig/Makefile savedefconfig
+
+# Include generated files
+-include include/config/auto.conf.cmd
+
+# Include dependency files
+-include $(wildcard $(foreach d,$(KBUILD_VMLINUX_OBJS),$(dir $d).*.cmd))
+
+# PHONY targets
+.PHONY: all vmlinux modules clean distclean help
+.PHONY: config menuconfig xconfig gconfig oldconfig defconfig savedefconfig
+.PHONY: FORCE
+
+# Force target
+FORCE:
+
+# Include build rules
+include $(srctree)/scripts/Kbuild.include
+
+# Architecture-specific targets
+include arch/$(SRCARCH)/Makefile
+
+# Module build rules
+include $(if $(wildcard $(srctree)/Makefile.modpost),$(srctree)/Makefile.modpost)
+
+# Configuration rules
+include $(if $(wildcard $(srctree)/scripts/kconfig/Makefile),$(srctree)/scripts/kconfig/Makefile)
+
+# Build rules
+include $(srctree)/Makefile.build
