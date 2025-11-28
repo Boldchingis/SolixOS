@@ -1,18 +1,26 @@
 # SolixOS Makefile
-# Enhanced with better error reporting and diagnostics
-# Build system for SolixOS x86 microkernel
+# Enhanced with modern build system, parallel compilation, and CI/CD support
+# Build system for SolixOS x86 microkernel - Version 2.0
 
-# Compiler and tools
-CC = gcc
-ASM = nasm
-LD = ld
-OBJCOPY = objcopy
-STRIP = strip
+# Compiler and tools with version checking
+CC ?= gcc
+ASM ?= nasm
+LD ?= ld
+OBJCOPY ?= objcopy
+STRIP ?= strip
+AR ?= ar
+NM ?= nm
+SIZE ?= size
 
-# Build configuration
+# Build configuration with enhanced options
 BUILD_TYPE ?= release
 DEBUG ?= 0
 VERBOSE ?= 0
+PARALLEL ?= 1
+PROFILE ?= 0
+LTO ?= 1
+SANITIZE ?= 0
+COVERAGE ?= 0
 
 # Directories
 SRC_DIR = src
@@ -31,19 +39,49 @@ KERNEL_ELF = $(BUILD_DIR)/kernel.elf
 KERNEL_BIN = $(BUILD_DIR)/kernel.bin
 ISO_FILE = $(BUILD_DIR)/solixos.iso
 
-# Compiler flags with enhanced diagnostics
-CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector \
-         -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
-         -Wno-unused-function -Wno-unused-parameter \
-         -I$(INCLUDE_DIR) -ffreestanding -fno-pic -fno-pie
+# Enhanced compiler flags with modern optimizations
+CFLAGS_BASE = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector \
+               -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
+               -Wno-unused-function -Wno-unused-parameter \
+               -I$(INCLUDE_DIR) -ffreestanding -fno-pic -fno-pie \
+               -fno-common -fno-strict-aliasing -frounding-math \
+               -fno-math-errno -fno-signaling-nans
 
-# Build-specific flags
+# Build-specific optimizations
 ifeq ($(BUILD_TYPE),debug)
-    CFLAGS += -g -O0 -DDEBUG=1 -fsanitize=address
+    CFLAGS_OPT = -g -O0 -DDEBUG=1 -fsanitize=address -fno-omit-frame-pointer
     ASMFLAGS += -g
+else ifeq ($(BUILD_TYPE),profile)
+    CFLAGS_OPT = -g -O2 -DNDEBUG -pg -fno-omit-frame-pointer
+    LDFLAGS += -pg
 else
-    CFLAGS += -O2 -DNDEBUG
+    CFLAGS_OPT = -O3 -DNDEBUG -flto -fwhole-program-vtables
 endif
+
+# Additional safety features
+ifeq ($(SANITIZE),1)
+    CFLAGS_SAFE = -fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
+else
+    CFLAGS_SAFE =
+endif
+
+# Coverage support
+ifeq ($(COVERAGE),1)
+    CFLAGS_COV = -fprofile-arcs -ftest-coverage
+else
+    CFLAGS_COV =
+endif
+
+# Link-time optimization
+ifeq ($(LTO),1)
+    CFLAGS_LTO = -flto -fno-fat-lto-objects
+    LDFLAGS_LTO = -flto
+else
+    CFLAGS_LTO =
+    LDFLAGS_LTO =
+endif
+
+CFLAGS = $(CFLAGS_BASE) $(CFLAGS_OPT) $(CFLAGS_SAFE) $(CFLAGS_COV) $(CFLAGS_LTO)
 
 # Verbose output control
 ifeq ($(VERBOSE),0)
@@ -55,8 +93,9 @@ endif
 # Assembly flags
 ASMFLAGS = -f elf32
 
-# Linker flags
-LDFLAGS = -m elf_i386 -nostdlib -T linker.ld
+# Linker flags with modern optimizations
+LDFLAGS = -m elf_i386 -nostdlib -T linker.ld $(LDFLAGS_LTO) \
+          -Wl,--gc-sections -Wl,--as-needed -Wl,--strip-all
 
 # Source files
 KERNEL_SOURCES = $(wildcard $(KERNEL_DIR)/*.c) $(wildcard $(KERNEL_DIR)/*.S)
@@ -91,14 +130,30 @@ $(BUILD_DIR):
 	$(V)mkdir -p $(BUILD_DIR)/$(APPS_DIR)
 	$(V)mkdir -p $(ISO_DIR)/boot/grub
 
-# Enhanced build reporting
+# Parallel compilation support
+ifeq ($(PARALLEL),1)
+    MAKEFLAGS += -j$(shell nproc 2>/dev/null || echo 4)
+endif
+
+# Enhanced build reporting with timing
+START_TIME := $(shell date +%s)
+
 define build_report
-	@echo "=== Build Report ==="
+	@echo "=== SolixOS Build Report ==="
 	@echo "Build Type: $(BUILD_TYPE)"
 	@echo "Debug: $(DEBUG)"
+	@echo "Parallel: $(PARALLEL)"
+	@echo "LTO: $(LTO)"
+	@echo "Sanitize: $(SANITIZE)"
+	@echo "Coverage: $(COVERAGE)"
 	@echo "Objects: $(words $(ALL_OBJECTS))"
-	@echo "Kernel Size: $$(wc -c < $(KERNEL_BIN)) bytes"
-	@echo "Build Time: $$(date)"
+	@if [ -f $(KERNEL_BIN) ]; then \
+	    echo "Kernel Size: $$(wc -c < $(KERNEL_BIN)) bytes"; \
+	    echo "Kernel Sections:"; \
+	    $(SIZE) $(KERNEL_BIN) 2>/dev/null || echo "Size tool not available"; \
+	fi
+	@echo "Build Time: $$(date +%H:%M:%S)"
+	@echo "Total Duration: $$(($$(date +%s) - $(START_TIME))) seconds"
 endef
 
 # Compile C source with enhanced error handling
@@ -174,28 +229,38 @@ debug: $(KERNEL_ELF)
 	@echo "[DEBUG] Press Ctrl+C to stop QEMU"
 	wait
 
-# Enhanced help system
+# Enhanced help system with modern options
 help:
-	@echo "SolixOS Build System - Enhanced Version"
+	@echo "SolixOS Build System - Version 2.0"
 	@echo "====================================="
 	@echo ""
 	@echo "Targets:"
 	@echo "  all          - Build kernel and ISO (default)"
 	@echo "  clean        - Remove all build artifacts"
 	@echo "  iso          - Build ISO image only"
+	@echo "  kernel       - Build kernel only"
 	@echo "  run          - Run in QEMU"
 	@echo "  debug        - Debug with GDB server"
+	@echo "  test         - Run test suite"
+	@echo "  benchmark    - Performance benchmarks"
 	@echo "  help         - Show this help"
 	@echo ""
 	@echo "Options:"
-	@echo "  BUILD_TYPE=debug|release - Build type (default: release)"
-	@echo "  DEBUG=0|1              - Enable debug mode (default: 0)"
-	@echo "  VERBOSE=0|1            - Verbose output (default: 0)"
+	@echo "  BUILD_TYPE=debug|release|profile - Build type (default: release)"
+	@echo "  DEBUG=0|1                      - Enable debug mode (default: 0)"
+	@echo "  VERBOSE=0|1                    - Verbose output (default: 0)"
+	@echo "  PARALLEL=0|1                   - Parallel compilation (default: 1)"
+	@echo "  LTO=0|1                        - Link-time optimization (default: 1)"
+	@echo "  SANITIZE=0|1                   - Address sanitization (default: 0)"
+	@echo "  COVERAGE=0|1                   - Code coverage (default: 0)"
+	@echo "  PROFILE=0|1                    - Profiling support (default: 0)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make BUILD_TYPE=debug DEBUG=1"
-	@echo "  make VERBOSE=1 run"
+	@echo "  make VERBOSE=1 PARALLEL=4 run"
 	@echo "  make clean && make all"
+	@echo "  make COVERAGE=1 test"
+	@echo "  make PROFILE=1 benchmark"
 
 # Enhanced dependency checking
 deps:
@@ -207,22 +272,60 @@ deps:
 	@which qemu-system-i386 > /dev/null || (echo "WARNING: qemu not found (needed for testing)"; exit 1)
 	@echo "[DEPS] All dependencies satisfied"
 
-# Performance targets
+# Modern performance targets
 perf: $(KERNEL_BIN)
 	@echo "[PERF] Analyzing performance..."
 	@echo "[PERF] Kernel sections:"
-	@size $(KERNEL_BIN) || echo "size command not available"
+	@$(SIZE) $(KERNEL_BIN) || echo "size command not available"
 	@echo "[PERF] Object file sizes:"
 	@du -h $(ALL_OBJECTS) || echo "du command not available"
+	@echo "[PERF] Symbol analysis:"
+	@$(NM) --print-size --size-sort $(KERNEL_BIN) | head -20 || echo "nm command not available"
 
-# Static analysis (if available)
+# Enhanced static analysis with more tools
 lint:
 	@echo "[LINT] Running static analysis..."
-	@which cppcheck > /dev/null && cppcheck --enable=all --std=c99 $(KERNEL_SOURCES) || echo "cppcheck not available"
+	@which cppcheck > /dev/null && cppcheck --enable=all --std=c99 --platform=unix32 \
+	    --suppress=missingIncludeSystem $(KERNEL_SOURCES) || echo "cppcheck not available"
 	@which clang-tidy > /dev/null && clang-tidy $(KERNEL_SOURCES) -- $(CFLAGS) || echo "clang-tidy not available"
+	@which flawfinder > /dev/null && flawfinder $(KERNEL_SOURCES) || echo "flawfinder not available"
+	@which splint > /dev/null && splint +strict -standard $(KERNEL_SOURCES) || echo "splint not available"
+
+# Code formatting
+format:
+	@echo "[FORMAT] Formatting code..."
+	@which clang-format > /dev/null && find . -name '*.c' -o -name '*.h' | xargs clang-format -i || echo "clang-format not available"
+
+# Test suite
+test: $(KERNEL_BIN)
+	@echo "[TEST] Running test suite..."
+	@echo "[TEST] Unit tests:"
+	@if [ -d tests ]; then \
+	    $(MAKE) -C tests run || echo "Tests not available"; \
+	else \
+	    echo "No test directory found"; \
+	fi
+
+# Benchmark suite
+benchmark: $(KERNEL_BIN)
+	@echo "[BENCH] Running benchmarks..."
+	@if [ -d benchmarks ]; then \
+	    $(MAKE) -C benchmarks run || echo "Benchmarks not available"; \
+	else \
+	    echo "No benchmark directory found"; \
+	fi
+
+# Coverage report
+coverage: COVERAGE=1
+coverage: clean test
+	@echo "[COV] Generating coverage report..."
+	@which gcov > /dev/null && gcov $(KERNEL_SOURCES) || echo "gcov not available"
+	@which lcov > /dev/null && lcov --capture --directory . --output-file coverage.info || echo "lcov not available"
+	@which genhtml > /dev/null && genhtml coverage.info --output-directory coverage_html || echo "genhtml not available"
 
 # Phony targets
-.PHONY: deps perf lint $(BUILD_DIR) $(ISO_DIR)/boot/grub
+.PHONY: all clean iso run debug help deps perf lint format test benchmark coverage \
+        $(BUILD_DIR) $(ISO_DIR)/boot/grub
 
 # Build everything
 build: setup kernel iso

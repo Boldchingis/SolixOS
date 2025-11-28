@@ -9,15 +9,36 @@
  * Version: 1.0 Enhanced
  */
 
-// System constants
+// System constants - Enhanced for modern systems
 #define KERNEL_VIRTUAL_BASE 0xC0000000
 #define PAGE_SIZE 4096
-#define KERNEL_STACK_SIZE 8192
-#define MAX_PROCESSES 64
-#define MAX_OPEN_FILES 16
-#define KERNEL_VERSION_MAJOR 1
+#define KERNEL_STACK_SIZE 16384  // Increased for better stack safety
+#define MAX_PROCESSES 256        // Increased for modern workloads
+#define MAX_OPEN_FILES 32        // More file descriptors per process
+#define KERNEL_VERSION_MAJOR 2
 #define KERNEL_VERSION_MINOR 0
 #define KERNEL_VERSION_PATCH 0
+#define KERNEL_VERSION_STRING "2.0.0"
+
+// Memory management constants
+#define KERNEL_HEAP_SIZE 64MB
+#define USER_STACK_SIZE 8MB
+#define MAX_MMAP_REGIONS 32
+#define PAGE_PRESENT 0x1
+#define PAGE_WRITE 0x2
+#define PAGE_USER 0x4
+
+// CPU and scheduling constants
+#define CPU_COUNT 4               // Support for multi-core
+#define TIMESLICE_MS 10           // Preemptive scheduling timeslice
+#define PRIORITY_LEVELS 8         // More granular priorities
+#define NICE_LEVELS 20            // Unix-style nice levels
+
+// Security constants
+#define USER_UID_START 1000
+#define ROOT_UID 0
+#define MAX_GROUPS 16
+#define CAPABILITY_COUNT 32
 
 // Debug and logging levels
 #define DEBUG_NONE 0
@@ -32,17 +53,38 @@
 #define PROCESS_BLOCKED 2
 #define PROCESS_TERMINATED 3
 
-// System call numbers
-#define SYS_EXIT 1
-#define SYS_FORK 2
-#define SYS_READ 3
-#define SYS_WRITE 4
-#define SYS_OPEN 5
-#define SYS_CLOSE 6
-#define SYS_EXEC 7
-#define SYS_WAIT 8
-#define SYS_MEMINFO 9
-#define SYS_DEBUG 10
+// Enhanced system call numbers with modern syscalls
+#define SYS_EXIT        1
+#define SYS_FORK        2
+#define SYS_READ        3
+#define SYS_WRITE       4
+#define SYS_OPEN        5
+#define SYS_CLOSE       6
+#define SYS_EXEC        7
+#define SYS_WAIT        8
+#define SYS_MEMINFO     9
+#define SYS_DEBUG       10
+#define SYS_MMAP        11
+#define SYS_MUNMAP      12
+#define SYS_BRK         13
+#define SYS_IOCTL       14
+#define SYS_SOCKET      15
+#define SYS_BIND        16
+#define SYS_CONNECT     17
+#define SYS_LISTEN      18
+#define SYS_ACCEPT      19
+#define SYS_SEND        20
+#define SYS_RECV        21
+#define SYS_GETPID      22
+#define SYS_GETUID      23
+#define SYS_SETUID      24
+#define SYS_GETGID      25
+#define SYS_SETGID      26
+#define SYS_CLONE       27
+#define SYS_KILL        28
+#define SYS_NANOSLEEP   29
+#define SYS_CLOCK_GETTIME 30
+#define SYS_GETTIMEOFDAY 31
 
 /**
  * Process Control Block (PCB)
